@@ -529,7 +529,7 @@ impl Command for PopKeyboardEnhancementFlags {
 /// Represents an event.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "derive-more", derive(IsVariant))]
-#[cfg_attr(not(feature = "bracketed-paste"), derive(Copy))]
+#[cfg_attr(not(any(feature = "bracketed-paste", feature = "osc52")), derive(Copy))]
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Hash)]
 pub enum Event {
     /// The terminal gained focus
@@ -544,6 +544,9 @@ pub enum Event {
     /// enabled.
     #[cfg(feature = "bracketed-paste")]
     Paste(String),
+    /// A clipboard query response via OSC 52.
+    #[cfg(feature = "osc52")]
+    OSC52PasteResponse(String),
     /// A resize event with new dimensions after resize (columns, rows).
     /// **Note** that resize events can occur in batches.
     Resize(u16, u16),
@@ -714,6 +717,16 @@ impl Event {
     pub fn as_paste_event(&self) -> Option<&str> {
         match self {
             Event::Paste(paste) => Some(paste),
+            _ => None,
+        }
+    }
+
+    /// Returns the pasted string if the event is an OSC 52 paste response event, otherwise `None`.
+    #[cfg(feature = "osc52")]
+    #[inline]
+    pub fn as_osc52_paste_response(&self) -> Option<&str> {
+        match self {
+            Event::OSC52PasteResponse(paste) => Some(paste),
             _ => None,
         }
     }

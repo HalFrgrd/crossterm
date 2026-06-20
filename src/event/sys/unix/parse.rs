@@ -7,6 +7,9 @@ use crate::event::{
 
 use crate::event::internal::InternalEvent;
 
+#[cfg(feature = "osc52")]
+use base64::prelude::{Engine, BASE64_STANDARD};
+
 // Event parsing
 //
 // This code (& previous one) are kind of ugly. We have to think about this,
@@ -74,6 +77,8 @@ pub(crate) fn parse_event(
                         }
                     }
                     b'[' => parse_csi(buffer),
+                    #[cfg(feature = "osc52")]
+                    b']' => parse_osc(buffer),
                     b'\x1B' => Ok(Some(InternalEvent::Event(Event::Key(KeyCode::Esc.into())))),
                     _ => parse_event(&buffer[1..], input_available).map(|event_option| {
                         event_option.map(|event| {
@@ -863,6 +868,57 @@ pub(crate) fn parse_utf8_char(buffer: &[u8]) -> io::Result<Option<char>> {
     }
 }
 
+#[cfg(feature = "osc52")]
+pub(crate) fn parse_osc(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
+    assert!(buffer.starts_with(b"\x1B]")); // ESC ]
+
+    let mut terminator_idx = None;
+    let mut i = 2; // skip ESC ]
+    while i < buffer.len() {
+        if buffer[i] == b'\x07' {
+            terminator_idx = Some(i);
+            break;
+        } else if buffer[i] == b'\x1B' {
+            if i + 1 < buffer.len() {
+                if buffer[i + 1] == b'\\' {
+                    terminator_idx = Some(i);
+                    break;
+                }
+            } else {
+                // ESC at the end of the buffer; we need to wait for the next byte.
+                return Ok(None);
+            }
+        }
+        i += 1;
+    }
+
+    let terminator_idx = match terminator_idx {
+        Some(idx) => idx,
+        None => return Ok(None),
+    };
+
+    // We have a complete OSC sequence.
+    let payload = &buffer[2..terminator_idx];
+
+    // OSC 52 query response format: 52;c;<base64_data>
+    if payload.starts_with(b"52;") {
+        let sub_payload = &payload[3..];
+        if let Some(semi_colon_pos) = sub_payload.iter().position(|&b| b == b';') {
+            let base64_payload = &sub_payload[semi_colon_pos + 1..];
+            let decoded_bytes = BASE64_STANDARD
+                .decode(base64_payload)
+                .map_err(|_| could_not_parse_event_error())?;
+            let decoded_text = String::from_utf8(decoded_bytes)
+                .map_err(|_| could_not_parse_event_error())?;
+            return Ok(Some(InternalEvent::Event(Event::OSC52PasteResponse(decoded_text))));
+        }
+    }
+
+    // If it's a complete OSC sequence but not one we handle,
+    // clear the buffer by returning an error.
+    Err(could_not_parse_event_error())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::event::{KeyEventState, KeyModifiers, MouseButton, MouseEvent};
@@ -1071,6 +1127,33 @@ mod tests {
             parse_event(b"\x1B[200~o\x1B[2D\x1B[201~", false).unwrap(),
             Some(InternalEvent::Event(Event::Paste("o\x1B[2D".to_string())))
         );
+    }
+
+    #[cfg(feature = "osc52")]
+    #[test]
+    fn test_parse_osc52_paste_response() {
+        // Partial sequence
+        assert_eq!(
+            parse_event(b"\x1B]52;c;Zm9v", false).unwrap(),
+            None,
+        );
+        // Partial sequence ending with ESC
+        assert_eq!(
+            parse_event(b"\x1B]52;c;Zm9v\x1B", false).unwrap(),
+            None,
+        );
+        // Valid sequence with BEL
+        assert_eq!(
+            parse_event(b"\x1B]52;c;Zm9v\x07", false).unwrap(),
+            Some(InternalEvent::Event(Event::OSC52PasteResponse("foo".to_string())))
+        );
+        // Valid sequence with ST (\x1B\\)
+        assert_eq!(
+            parse_event(b"\x1B]52;c;Zm9v\x1B\\", false).unwrap(),
+            Some(InternalEvent::Event(Event::OSC52PasteResponse("foo".to_string())))
+        );
+        // Unhandled OSC sequence - should return error
+        assert!(parse_event(b"\x1B]10;c;Zm9v\x07", false).is_err());
     }
 
     #[test]
