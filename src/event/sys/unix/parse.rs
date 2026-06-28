@@ -1,14 +1,13 @@
 use std::io;
 
+#[cfg(feature = "osc52")]
+use base64::prelude::{Engine, BASE64_STANDARD};
+
+use crate::event::internal::InternalEvent;
 use crate::event::{
     Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers, KeyboardEnhancementFlags,
     MediaKeyCode, ModifierKeyCode, MouseButton, MouseEvent, MouseEventKind,
 };
-
-use crate::event::internal::InternalEvent;
-
-#[cfg(feature = "osc52")]
-use base64::prelude::{Engine, BASE64_STANDARD};
 
 // Event parsing
 //
@@ -908,8 +907,8 @@ pub(crate) fn parse_osc(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
             let decoded_bytes = BASE64_STANDARD
                 .decode(base64_payload)
                 .map_err(|_| could_not_parse_event_error())?;
-            let decoded_text = String::from_utf8(decoded_bytes)
-                .map_err(|_| could_not_parse_event_error())?;
+            let decoded_text =
+                String::from_utf8(decoded_bytes).map_err(|_| could_not_parse_event_error())?;
             return Ok(Some(InternalEvent::Event(Event::Paste(decoded_text))));
         }
     }
@@ -1133,15 +1132,9 @@ mod tests {
     #[test]
     fn test_parse_osc52_paste_response() {
         // Partial sequence
-        assert_eq!(
-            parse_event(b"\x1B]52;c;Zm9v", false).unwrap(),
-            None,
-        );
+        assert_eq!(parse_event(b"\x1B]52;c;Zm9v", false).unwrap(), None,);
         // Partial sequence ending with ESC
-        assert_eq!(
-            parse_event(b"\x1B]52;c;Zm9v\x1B", false).unwrap(),
-            None,
-        );
+        assert_eq!(parse_event(b"\x1B]52;c;Zm9v\x1B", false).unwrap(), None,);
         // Valid sequence with BEL
         assert_eq!(
             parse_event(b"\x1B]52;c;Zm9v\x07", false).unwrap(),
