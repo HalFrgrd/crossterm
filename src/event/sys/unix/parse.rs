@@ -910,7 +910,7 @@ pub(crate) fn parse_osc(buffer: &[u8]) -> io::Result<Option<InternalEvent>> {
                 .map_err(|_| could_not_parse_event_error())?;
             let decoded_text = String::from_utf8(decoded_bytes)
                 .map_err(|_| could_not_parse_event_error())?;
-            return Ok(Some(InternalEvent::Event(Event::OSC52PasteResponse(decoded_text))));
+            return Ok(Some(InternalEvent::Event(Event::Paste(decoded_text))));
         }
     }
 
@@ -1145,12 +1145,12 @@ mod tests {
         // Valid sequence with BEL
         assert_eq!(
             parse_event(b"\x1B]52;c;Zm9v\x07", false).unwrap(),
-            Some(InternalEvent::Event(Event::OSC52PasteResponse("foo".to_string())))
+            Some(InternalEvent::Event(Event::Paste("foo".to_string())))
         );
         // Valid sequence with ST (\x1B\\)
         assert_eq!(
             parse_event(b"\x1B]52;c;Zm9v\x1B\\", false).unwrap(),
-            Some(InternalEvent::Event(Event::OSC52PasteResponse("foo".to_string())))
+            Some(InternalEvent::Event(Event::Paste("foo".to_string())))
         );
         // Unhandled OSC sequence - should return error
         assert!(parse_event(b"\x1B]10;c;Zm9v\x07", false).is_err());

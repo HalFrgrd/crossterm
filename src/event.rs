@@ -541,12 +541,9 @@ pub enum Event {
     /// A single mouse event with additional pressed modifiers.
     Mouse(MouseEvent),
     /// A string that was pasted into the terminal. Only emitted if bracketed paste has been
-    /// enabled.
-    #[cfg(feature = "bracketed-paste")]
+    /// enabled or clipboard query response via OSC 52 is received.
+    #[cfg(any(feature = "bracketed-paste", feature = "osc52"))]
     Paste(String),
-    /// A clipboard query response via OSC 52.
-    #[cfg(feature = "osc52")]
-    OSC52PasteResponse(String),
     /// A resize event with new dimensions after resize (columns, rows).
     /// **Note** that resize events can occur in batches.
     Resize(u16, u16),
@@ -712,21 +709,11 @@ impl Event {
     /// }
     /// # std::io::Result::Ok(())
     /// ```
-    #[cfg(feature = "bracketed-paste")]
+    #[cfg(any(feature = "bracketed-paste", feature = "osc52"))]
     #[inline]
     pub fn as_paste_event(&self) -> Option<&str> {
         match self {
             Event::Paste(paste) => Some(paste),
-            _ => None,
-        }
-    }
-
-    /// Returns the pasted string if the event is an OSC 52 paste response event, otherwise `None`.
-    #[cfg(feature = "osc52")]
-    #[inline]
-    pub fn as_osc52_paste_response(&self) -> Option<&str> {
-        match self {
-            Event::OSC52PasteResponse(paste) => Some(paste),
             _ => None,
         }
     }
@@ -1673,7 +1660,7 @@ mod tests {
         assert!(event.is_mouse());
         assert!(!event.is_key());
 
-        #[cfg(feature = "bracketed-paste")]
+        #[cfg(any(feature = "bracketed-paste", feature = "osc52"))]
         {
             let event = Event::Paste("".to_string());
             assert!(event.is_paste());
@@ -1715,7 +1702,7 @@ mod tests {
         assert_eq!(event.as_mouse_event(), Some(MOUSE_CLICK));
         assert_eq!(event.as_key_event(), None);
 
-        #[cfg(feature = "bracketed-paste")]
+        #[cfg(any(feature = "bracketed-paste", feature = "osc52"))]
         {
             let event = Event::Paste("".to_string());
             assert_eq!(event.as_paste_event(), Some(""));
