@@ -206,6 +206,58 @@ impl<T: AsRef<[u8]>> CopyToClipboard<T> {
     }
 }
 
+/// A command that requests clipboard contents from the terminal host via OSC 52.
+///
+/// If supported, the terminal emulator will reply with an OSC 52 sequence containing the
+/// clipboard content, which is then parsed as an [`Event::Paste`](crate::event::Event::Paste).
+///
+/// Commands must be executed/queued for execution otherwise they do nothing.
+///
+/// # Examples
+///
+/// ```no_run
+/// use crossterm::execute;
+/// use crossterm::clipboard::RequestClipboardContents;
+/// // Request contents from clipboard
+/// execute!(std::io::stdout(), RequestClipboardContents::clipboard());
+/// // Request contents from primary selection
+/// execute!(std::io::stdout(), RequestClipboardContents::primary());
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequestClipboardContents(pub ClipboardType);
+
+impl Command for RequestClipboardContents {
+    fn write_ansi(&self, f: &mut impl fmt::Write) -> fmt::Result {
+        write!(
+            f,
+            osc!("52;{destination};?"),
+            destination = Into::<char>::into(&self.0)
+        )
+    }
+
+    #[cfg(windows)]
+    fn execute_winapi(&self) -> std::io::Result<()> {
+        use std::io;
+
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Requesting clipboard contents is not implemented for the Windows API.",
+        ))
+    }
+}
+
+impl RequestClipboardContents {
+    /// Construct a [`RequestClipboardContents`] command for the "clipboard" (or 'c') selection.
+    pub fn clipboard() -> Self {
+        Self(ClipboardType::Clipboard)
+    }
+
+    /// Construct a [`RequestClipboardContents`] command for the "primary" (or 'p') selection.
+    pub fn primary() -> Self {
+        Self(ClipboardType::Primary)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,5 +356,20 @@ mod tests {
             .write_ansi(&mut buffer)
             .unwrap();
         assert_eq!(buffer, "\x1b]52;p;Zm9v\x1b\\");
+    }
+
+    #[test]
+    fn test_request_clipboard_contents_osc52() {
+        let mut buffer = String::new();
+        super::RequestClipboardContents::clipboard()
+            .write_ansi(&mut buffer)
+            .unwrap();
+        assert_eq!(buffer, "\x1b]52;c;?\x1b\\");
+
+        let mut buffer = String::new();
+        super::RequestClipboardContents::primary()
+            .write_ansi(&mut buffer)
+            .unwrap();
+        assert_eq!(buffer, "\x1b]52;p;?\x1b\\");
     }
 }

@@ -70,7 +70,7 @@
 //!     [`LeaveAlternateScreen`](terminal/struct.LeaveAlternateScreen.html)
 //! - Module [`clipboard`](clipboard/index.html) (requires
 //!   [`feature = "osc52"`](#optional-features))
-//!   - Clipboard - [`CopyToClipboard`](clipboard/struct.CopyToClipboard.html)
+//!   - Clipboard - [`CopyToClipboard`](clipboard/struct.CopyToClipboard.html), [`RequestClipboardContents`](clipboard/struct.RequestClipboardContents.html)
 //!
 //! ### Command Execution
 //!
